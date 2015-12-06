@@ -108,14 +108,14 @@ public class MainActivity extends AppCompatActivity implements AudioReceiver.Aud
             mAudioController.stopForegroundService();
             mAudioController.requestStatus();
         }
-        // startService(AudioService.getActionIntent(MainActivity.this, Action.GET_STATUS));
+        // startService(AudioService.getActionIntent(this, Action.GET_STATUS));
     }
 
     @Override
     protected void onPause() {
         LocalBroadcastManager.getInstance(this).unregisterReceiver(mAudioReceiver);
         if (mAudioController != null && mAudioController.isAudioPlaying()) {
-            startService(AudioService.getActionIntent(MainActivity.this, Action.GET_STATUS));
+            startService(AudioService.getActionIntent(this, Action.GET_STATUS));
             mAudioController.startForegroundService(AUDIO_TRACK_TITLE);
         }
         super.onPause();

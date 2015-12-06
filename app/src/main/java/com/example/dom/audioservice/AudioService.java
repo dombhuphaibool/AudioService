@@ -301,7 +301,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
 
     @Override
     public boolean isAudioPlaying() {
-        return (mAudioPlayer != null ? mAudioPlayer.isPlaying() : false);
+        return (mAudioPlayer != null && mAudioPlayer.isPlaying());
     }
 
     @Override
