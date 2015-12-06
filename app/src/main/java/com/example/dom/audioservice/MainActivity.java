@@ -96,6 +96,7 @@ public class MainActivity extends AppCompatActivity implements AudioReceiver.Aud
     @Override
     public void onAudioCompleted() {
         mIsPlaying = false;
+        mProgressBar.setProgress(0);
         updateUI();
     }
 

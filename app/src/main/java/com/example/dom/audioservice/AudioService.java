@@ -1,12 +1,11 @@
 package com.example.dom.audioservice;
 
-import android.app.Notification;
-import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.content.res.AssetFileDescriptor;
 import android.media.MediaPlayer;
+import android.os.Binder;
 import android.os.Handler;
 import android.os.IBinder;
 import android.support.v4.content.LocalBroadcastManager;
@@ -28,6 +27,9 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
 
     private static final long UPDATE_INTERVAL_MSEC = 1000 / 40; // Try updating at 40 Hz
 
+    // Binder given to clients
+    private final IBinder mBinder = new LocalBinder();
+
     private int mLastPositionMsec;
 
     private Handler mMainHandler;
@@ -37,6 +39,9 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
     private MediaPlayer mAudioPlayer;
 
     private boolean mIsLoaded;
+
+    private AudioNotificationManager mNotificationManager;
+    private boolean mSendNotification;
 
     public enum Action {
         PLAY(ACTION_PLAY),
@@ -62,6 +67,17 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         return actionIntent;
     }
 
+    /**
+     * Class used for the client Binder.  Because we know this service always
+     * runs in the same process as its clients, we don't need to deal with IPC.
+     */
+    public class LocalBinder extends Binder {
+        AudioService getService() {
+            // Return this instance of AudioService so clients can call public methods
+            return AudioService.this;
+        }
+    }
+
     @Override
     public void onCreate() {
         super.onCreate();
@@ -76,6 +92,9 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         mAudioPlayer.setOnPreparedListener(this);
         mAudioPlayer.setOnCompletionListener(this);
         mAudioPlayer.setOnErrorListener(this);
+
+        mNotificationManager = new AudioNotificationManager(this);
+        mSendNotification = false;
     }
 
     @Override
@@ -145,6 +164,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
             case ACTION_GET_STATUS:
                 boolean isPlaying = mAudioPlayer.isPlaying();
                 int durationMsec = mAudioPlayer.getDuration();
+                durationMsec = Math.max(durationMsec, 1);
                 positionMsec = mAudioPlayer.getCurrentPosition();
                 mBroadcastManager.sendBroadcast(AudioReceiver.getGetStatusIntent(mIsLoaded, isPlaying, durationMsec, positionMsec));
                 break;
@@ -162,12 +182,20 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
             mAudioPlayer.pause();
             stopProgressUpdates();
         }
+        if (mSendNotification) {
+            mNotificationManager.updatePlayState(false);
+            mNotificationManager.sendNotification();
+        }
     }
 
     private void doResume() {
         if (!mAudioPlayer.isPlaying()) {
             mAudioPlayer.start();
             startProgressUpdates();
+        }
+        if (mSendNotification) {
+            mNotificationManager.updatePlayState(true);
+            mNotificationManager.sendNotification();
         }
     }
 
@@ -180,6 +208,11 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
                 if (currPosMsec != mLastPositionMsec) {
                     mBroadcastManager.sendBroadcast(AudioReceiver.getPositionUpdateIntent(currPosMsec));
                     mLastPositionMsec = currPosMsec;
+                }
+
+                if (mSendNotification) {
+                    mNotificationManager.updateProgress(mAudioPlayer.getDuration(), currPosMsec);
+                    mNotificationManager.sendNotification();
                 }
 
                 mMainHandler.postDelayed(this, UPDATE_INTERVAL_MSEC);
@@ -195,8 +228,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
 
     @Override
     public IBinder onBind(Intent intent) {
-        // TODO: Return the communication channel to the service.
-        throw new UnsupportedOperationException("Not yet implemented");
+        return mBinder;
     }
 
     @Override
@@ -212,25 +244,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
 
         doResume();
 
-        startForegroundService();
-    }
-
-    private static final int ONGOING_NOTIFICATION_ID = 1234;
-    private void startForegroundService() {
-        Intent notificationIntent = new Intent(this, MainActivity.class);
-        PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent, 0);
-        Notification notification = new Notification.Builder(this)
-                .setContentTitle(getText(R.string.notification_title))
-                .setContentText(getText(R.string.notification_message))
-                .setSmallIcon(R.drawable.ic_notification)
-                // .setLargeIcon(Icon.createWithResource(this, R.drawable.ic_notification_large))
-                .setContentIntent(pendingIntent)
-                .build();
-        startForeground(ONGOING_NOTIFICATION_ID, notification);
-    }
-
-    private void stopForegroundService() {
-        stopForeground(true);
+        startForegroundService("Chopin Op.9 no.1");
     }
 
     @Override
@@ -241,11 +255,29 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         }
 
         mBroadcastManager.sendBroadcast(AudioReceiver.getActionIntent(AudioReceiver.Action.COMPLETED));
+
+        if (mSendNotification) {
+            mNotificationManager.updatePlayState(false);
+            mNotificationManager.updateProgress(1, 0);
+            mNotificationManager.sendNotification();
+        }
     }
 
     @Override
     public boolean onError(MediaPlayer mp, int what, int extra) {
         // @TODO: Log errors
         return false;   // We're not currently handling errors
+    }
+
+    private void startForegroundService(String notificationContent) {
+        mSendNotification = true;
+        mNotificationManager.updateContent(notificationContent);
+        mNotificationManager.updatePlayState(mAudioPlayer.isPlaying());
+        startForeground(mNotificationManager.getNotificationId(), mNotificationManager.getAudioNotification());
+    }
+
+    private void stopForegroundService() {
+        stopForeground(true);
+        mSendNotification = false;
     }
 }

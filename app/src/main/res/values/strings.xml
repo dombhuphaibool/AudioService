@@ -4,7 +4,7 @@
     <string name="pause">Pause</string>
     <string name="rewind_15_sec">Rewind 15 sec</string>
 
-    <string name="notification_title">Notification Title goes here</string>
+    <string name="notification_title">Audio Service</string>
     <string name="notification_message">Notification Message goes here</string>
     <string name="ticker_text">Ticker Text goes here</string>
 </resources>
