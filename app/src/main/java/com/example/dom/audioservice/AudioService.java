@@ -14,7 +14,7 @@ import android.text.TextUtils;
 import java.io.IOException;
 
 public class AudioService extends Service implements MediaPlayer.OnPreparedListener,
-        MediaPlayer.OnCompletionListener, MediaPlayer.OnErrorListener {
+        MediaPlayer.OnCompletionListener, MediaPlayer.OnErrorListener, AudioLocalController {
 
     private static final String ACTION_PLAY = "com.example.action.PLAY";
     private static final String ACTION_RESUME = "com.example.action.RESUME";
@@ -72,9 +72,9 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
      * runs in the same process as its clients, we don't need to deal with IPC.
      */
     public class LocalBinder extends Binder {
-        AudioService getService() {
+        AudioLocalController getLocalController() {
             // Return this instance of AudioService so clients can call public methods
-            return AudioService.this;
+            return (AudioLocalController) AudioService.this;
         }
     }
 
@@ -114,59 +114,30 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
             return START_NOT_STICKY;
         }
 
-        int positionMsec = 0;
         switch (intent.getAction()) {
             case ACTION_PLAY:
                 int audioId = intent.getIntExtra(EXTRA_AUDIO_ID, 0);
-                if (audioId != 0) {
-                    AssetFileDescriptor assetFD = getResources().openRawResourceFd(audioId);
-                    try {
-                        mAudioPlayer.setDataSource(assetFD.getFileDescriptor(),
-                                assetFD.getStartOffset(), assetFD.getLength());
-                        mAudioPlayer.prepareAsync();
-                    } catch (IOException ex) {
-                        // @TODO: Log exception here...
-                    }
-                }
+                playAudio(audioId);
                 break;
 
             case ACTION_RESUME:
-                doResume();
-                positionMsec = mAudioPlayer.getCurrentPosition();
-                mBroadcastManager.sendBroadcast(AudioReceiver.getAudioResumeIntent(positionMsec));
+                resumeAudio();
                 break;
 
             case ACTION_PAUSE:
-                doPause();
-                mBroadcastManager.sendBroadcast(AudioReceiver.getActionIntent(AudioReceiver.Action.PAUSED));
+                pauseAudio();
                 break;
 
             case ACTION_REWIND_FULL:
-                doPause();
-                mAudioPlayer.seekTo(0);
+                rewindAudioFull();
                 break;
 
             case ACTION_REWIND_15_SEC:
-                boolean resumePlay = mAudioPlayer.isPlaying();
-                doPause();
-                int seekPosMsec = mAudioPlayer.getCurrentPosition() - 15000;
-                seekPosMsec = Math.max(seekPosMsec, 0);
-                mAudioPlayer.seekTo(seekPosMsec);
-                if (resumePlay) {
-                    doResume();
-                } else {
-                    // Post current position
-                    positionMsec = mAudioPlayer != null ? mAudioPlayer.getCurrentPosition() : 0;
-                    mBroadcastManager.sendBroadcast(AudioReceiver.getPositionUpdateIntent(positionMsec));
-                }
+                rewindAudio15Sec();
                 break;
 
             case ACTION_GET_STATUS:
-                boolean isPlaying = mAudioPlayer.isPlaying();
-                int durationMsec = mAudioPlayer.getDuration();
-                durationMsec = Math.max(durationMsec, 1);
-                positionMsec = mAudioPlayer.getCurrentPosition();
-                mBroadcastManager.sendBroadcast(AudioReceiver.getGetStatusIntent(mIsLoaded, isPlaying, durationMsec, positionMsec));
+                requestStatus();
                 break;
 
             default:
@@ -243,8 +214,6 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         mBroadcastManager.sendBroadcast(AudioReceiver.getAudioStartedIntent(durationMsec));
 
         doResume();
-
-        startForegroundService("Chopin Op.9 no.1");
     }
 
     @Override
@@ -269,15 +238,85 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         return false;   // We're not currently handling errors
     }
 
-    private void startForegroundService(String notificationContent) {
+    /***************************************************************************************
+     *                               LocalAudioController
+     ***************************************************************************************/
+    @Override
+    public void playAudio(int audioResId) {
+        if (audioResId != 0) {
+            AssetFileDescriptor assetFD = getResources().openRawResourceFd(audioResId);
+            try {
+                mAudioPlayer.setDataSource(assetFD.getFileDescriptor(),
+                        assetFD.getStartOffset(), assetFD.getLength());
+                mAudioPlayer.prepareAsync();
+            } catch (IOException ex) {
+                // @TODO: Log exception here...
+            }
+        }
+    }
+
+    @Override
+    public void resumeAudio() {
+        doResume();
+        int positionMsec = mAudioPlayer.getCurrentPosition();
+        mBroadcastManager.sendBroadcast(AudioReceiver.getAudioResumeIntent(positionMsec));
+    }
+
+    @Override
+    public void pauseAudio() {
+        doPause();
+        mBroadcastManager.sendBroadcast(AudioReceiver.getActionIntent(AudioReceiver.Action.PAUSED));
+    }
+
+    @Override
+    public void rewindAudioFull() {
+        doPause();
+        mAudioPlayer.seekTo(0);
+    }
+
+    @Override
+    public void rewindAudio15Sec() {
+        boolean resumePlay = mAudioPlayer.isPlaying();
+        doPause();
+        int seekPosMsec = mAudioPlayer.getCurrentPosition() - 15000;
+        seekPosMsec = Math.max(seekPosMsec, 0);
+        mAudioPlayer.seekTo(seekPosMsec);
+        if (resumePlay) {
+            doResume();
+        } else {
+            // Post current position
+            int positionMsec = mAudioPlayer != null ? mAudioPlayer.getCurrentPosition() : 0;
+            mBroadcastManager.sendBroadcast(AudioReceiver.getPositionUpdateIntent(positionMsec));
+        }
+    }
+
+    @Override
+    public void requestStatus() {
+        boolean isPlaying = mAudioPlayer.isPlaying();
+        int durationMsec = mAudioPlayer.getDuration();
+        durationMsec = Math.max(durationMsec, 1);
+        int positionMsec = mAudioPlayer.getCurrentPosition();
+        mBroadcastManager.sendBroadcast(AudioReceiver.getGetStatusIntent(mIsLoaded, isPlaying, durationMsec, positionMsec));
+    }
+
+    @Override
+    public boolean isAudioPlaying() {
+        return (mAudioPlayer != null ? mAudioPlayer.isPlaying() : false);
+    }
+
+    @Override
+    public void startForegroundService(String notificationContent) {
         mSendNotification = true;
         mNotificationManager.updateContent(notificationContent);
         mNotificationManager.updatePlayState(mAudioPlayer.isPlaying());
         startForeground(mNotificationManager.getNotificationId(), mNotificationManager.getAudioNotification());
     }
 
-    private void stopForegroundService() {
-        stopForeground(true);
-        mSendNotification = false;
+    @Override
+    public void stopForegroundService() {
+        if (mSendNotification) {
+            stopForeground(true);
+            mSendNotification = false;
+        }
     }
 }
