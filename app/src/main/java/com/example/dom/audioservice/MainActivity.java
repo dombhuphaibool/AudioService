@@ -16,6 +16,8 @@ import android.widget.ProgressBar;
 import com.example.dom.audioservice.AudioService.Action;
 
 public class MainActivity extends AppCompatActivity implements AudioReceiver.AudioListener {
+    private static int AUDIO_TRACK_RESOURCE_ID = R.raw.nocturne_op9_no1;
+    private static String AUDIO_TRACK_TITLE = "Chopin Op.9 no.1";
 
     private boolean mIsLoaded = false;
     private boolean mIsPlaying = false;
@@ -60,7 +62,7 @@ public class MainActivity extends AppCompatActivity implements AudioReceiver.Aud
                 } else if (mIsLoaded) {
                     mAudioController.resumeAudio();
                 } else {
-                    mAudioController.playAudio(R.raw.nocturne_op9_no1);
+                    mAudioController.playAudio(AUDIO_TRACK_RESOURCE_ID);
                 }
             }
         });
@@ -114,7 +116,7 @@ public class MainActivity extends AppCompatActivity implements AudioReceiver.Aud
         LocalBroadcastManager.getInstance(this).unregisterReceiver(mAudioReceiver);
         if (mAudioController != null && mAudioController.isAudioPlaying()) {
             startService(AudioService.getActionIntent(MainActivity.this, Action.GET_STATUS));
-            mAudioController.startForegroundService("Chopin Op.9 no.1");
+            mAudioController.startForegroundService(AUDIO_TRACK_TITLE);
         }
         super.onPause();
     }
