@@ -1,4 +1,4 @@
-package com.example.dom.audioservice;
+package com.bandonleon.audioservice;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -8,19 +8,19 @@ import android.content.IntentFilter;
 import java.util.HashSet;
 import java.util.Set;
 
-public class AudioReceiver extends BroadcastReceiver {
+public class AudioClientReceiver extends BroadcastReceiver {
 
-    private static final String AUDIO_STARTED = "com.example.action.AUDIO_STARTED";
-    private static final String AUDIO_COMPLETED = "com.example.action.AUDIO_COMPLETED";
-    private static final String AUDIO_PAUSED = "com.example.action.AUDIO_PAUSED";
-    private static final String AUDIO_RESUMED = "com.example.action.AUDIO_RESUMED";
-    private static final String AUDIO_GET_STATUS = "com.example.action.GET_STATUS";
-    private static final String AUDIO_POSITION_UPDATE = "com.example.action.PROGRESS_UPDATE";
+    private static final String AUDIO_STARTED = "com.bandonleon.clientreceiver.action.AUDIO_STARTED";
+    private static final String AUDIO_COMPLETED = "com.bandonleon.clientreceiver.action.AUDIO_COMPLETED";
+    private static final String AUDIO_PAUSED = "com.bandonleon.clientreceiver.action.AUDIO_PAUSED";
+    private static final String AUDIO_RESUMED = "com.bandonleon.clientreceiver.action.AUDIO_RESUMED";
+    private static final String AUDIO_GET_STATUS = "com.bandonleon.clientreceiver.action.GET_STATUS";
+    private static final String AUDIO_POSITION_UPDATE = "com.bandonleon.clientreceiver.action.PROGRESS_UPDATE";
 
-    private static final String EXTRA_DURATION = "com.example.extra.DURATION";
-    private static final String EXTRA_POSITION = "com.example.extra.POSITION";
-    private static final String EXTRA_IS_LOADED = "com.example.extra.IS_LOADED";
-    private static final String EXTRA_IS_PLAYING = "com.example.extra.IS_PLAYING";
+    private static final String EXTRA_DURATION = "com.bandonleon.clientreceiver.extra.DURATION";
+    private static final String EXTRA_POSITION = "com.bandonleon.clientreceiver.extra.POSITION";
+    private static final String EXTRA_IS_LOADED = "com.bandonleon.clientreceiver.extra.IS_LOADED";
+    private static final String EXTRA_IS_PLAYING = "com.bandonleon.clientreceiver.extra.IS_PLAYING";
 
     public static IntentFilter getAudioReceiverFilter() {
         IntentFilter filter = new IntentFilter();

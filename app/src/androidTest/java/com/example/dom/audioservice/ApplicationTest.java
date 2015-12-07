@@ -1,4 +1,4 @@
-package com.example.dom.audioservice;
+package com.bandonleon.audioservice;
 
 import android.app.Application;
 import android.test.ApplicationTestCase;

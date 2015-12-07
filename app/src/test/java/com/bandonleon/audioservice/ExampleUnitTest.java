@@ -1,4 +1,4 @@
-package com.example.dom.audioservice;
+package com.bandonleon.audioservice;
 
 import org.junit.Test;
 

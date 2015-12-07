@@ -5,7 +5,7 @@ android {
     buildToolsVersion "23.0.2"
 
     defaultConfig {
-        applicationId "com.example.dom.audioservice"
+        applicationId "com.bandonleon.audioservice"
         minSdkVersion 16
         targetSdkVersion 23
         versionCode 1

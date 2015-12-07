@@ -1,4 +1,4 @@
-package com.example.dom.audioservice;
+package com.bandonleon.audioservice;
 
 import android.content.ComponentName;
 import android.content.Context;
@@ -13,16 +13,14 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.ProgressBar;
 
-import com.example.dom.audioservice.AudioService.Action;
-
-public class MainActivity extends AppCompatActivity implements AudioReceiver.AudioListener {
+public class MainActivity extends AppCompatActivity implements AudioClientReceiver.AudioListener {
     private static int AUDIO_TRACK_RESOURCE_ID = R.raw.nocturne_op9_no1;
     private static String AUDIO_TRACK_TITLE = "Chopin Op.9 no.1";
 
     private boolean mIsLoaded = false;
     private boolean mIsPlaying = false;
 
-    private AudioReceiver mAudioReceiver;
+    private AudioClientReceiver mAudioReceiver;
 
     private Button mActionBtn;
     private ProgressBar mProgressBar;
@@ -32,7 +30,7 @@ public class MainActivity extends AppCompatActivity implements AudioReceiver.Aud
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        mAudioReceiver = new AudioReceiver();
+        mAudioReceiver = new AudioClientReceiver();
         mAudioReceiver.addAudioListener(this);
 
         // Initialize states, but these will be updated in onResume()
@@ -102,7 +100,7 @@ public class MainActivity extends AppCompatActivity implements AudioReceiver.Aud
     @Override
     protected void onResume() {
         super.onResume();
-        IntentFilter filter = AudioReceiver.getAudioReceiverFilter();
+        IntentFilter filter = AudioClientReceiver.getAudioReceiverFilter();
         LocalBroadcastManager.getInstance(this).registerReceiver(mAudioReceiver, filter);
         if (mAudioController != null) {
             mAudioController.stopForegroundService();
@@ -115,7 +113,7 @@ public class MainActivity extends AppCompatActivity implements AudioReceiver.Aud
     protected void onPause() {
         LocalBroadcastManager.getInstance(this).unregisterReceiver(mAudioReceiver);
         if (mAudioController != null && mAudioController.isAudioPlaying()) {
-            startService(AudioService.getActionIntent(this, Action.GET_STATUS));
+            startService(AudioService.getStartIdleIntent(this));
             mAudioController.startForegroundService(AUDIO_TRACK_TITLE);
         }
         super.onPause();
@@ -127,7 +125,7 @@ public class MainActivity extends AppCompatActivity implements AudioReceiver.Aud
     }
 
     /***************************************************************************************
-     *                              AudioReceiver.AudioListener
+     *                              AudioClientReceiver.AudioListener
      ***************************************************************************************/
     @Override
     public void onAudioStarted(int durationMsec) {

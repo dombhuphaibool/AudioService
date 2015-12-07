@@ -1,4 +1,4 @@
-package com.example.dom.audioservice;
+package com.bandonleon.audioservice;
 
 import android.app.Notification;
 import android.app.NotificationManager;
@@ -8,7 +8,7 @@ import android.content.Intent;
 import android.view.View;
 import android.widget.RemoteViews;
 
-import com.example.dom.audioservice.AudioService.Action;
+import com.bandonleon.audioservice.AudioServiceReceiver.Action;
 
 /**
  * Created by dom on 12/6/15.
@@ -25,9 +25,9 @@ public class AudioNotificationManager {
 
         mNotificationView = new RemoteViews(context.getPackageName(), R.layout.audio_notification);
         mNotificationView.setTextViewText(R.id.title, context.getText(R.string.notification_title));
-        PendingIntent resumeIntent = PendingIntent.getService(context, 0, AudioService.getActionIntent(context, Action.RESUME), 0);
+        PendingIntent resumeIntent = PendingIntent.getBroadcast(context, 0, AudioServiceReceiver.getActionIntent(Action.RESUME), 0);
         mNotificationView.setOnClickPendingIntent(R.id.play_btn, resumeIntent);
-        PendingIntent pauseIntent = PendingIntent.getService(context, 0, AudioService.getActionIntent(context, AudioService.Action.PAUSE), 0);
+        PendingIntent pauseIntent = PendingIntent.getBroadcast(context, 0, AudioServiceReceiver.getActionIntent(Action.PAUSE), 0);
         mNotificationView.setOnClickPendingIntent(R.id.pause_btn, pauseIntent);
 
         Intent notificationIntent = new Intent(context, MainActivity.class);
