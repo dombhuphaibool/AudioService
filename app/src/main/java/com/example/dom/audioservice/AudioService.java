@@ -145,7 +145,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
                 break;
         }
 
-        return START_STICKY;
+        return START_NOT_STICKY;
     }
 
     private void doPause() {
