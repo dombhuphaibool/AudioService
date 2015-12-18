@@ -113,6 +113,8 @@ public class MainActivity extends AppCompatActivity implements AudioClientReceiv
     protected void onPause() {
         LocalBroadcastManager.getInstance(this).unregisterReceiver(mAudioReceiver);
         if (mAudioController != null && mAudioController.isAudioPlaying()) {
+            // We need to start the service here because after we unbind, it will go away
+            // if no one else has started the service
             startService(AudioService.getStartIdleIntent(this));
             mAudioController.startForegroundService(AUDIO_TRACK_TITLE);
         } else {
