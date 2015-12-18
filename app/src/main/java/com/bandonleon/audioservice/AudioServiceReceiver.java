@@ -14,6 +14,7 @@ public class AudioServiceReceiver extends BroadcastReceiver {
     private static final String REWIND_AUDIO_FULL = "com.bandonleon.serverreceiver.action.REWIND_AUDIO_FULL";
     private static final String REWIND_AUDIO_15_SEC = "com.bandonleon.serverreceiver.action.REWIND_AUDIO_15_SEC";
     private static final String REQUEST_STATUS = "com.bandonleon.serverreceiver.action.REQUEST_STATUS";
+    private static final String DISMISS_NOTIFICATION = "com.bandonleon.serverreceiver.action.DISMISS_NOTIFICATION";
 
     public static IntentFilter getAudioReceiverFilter() {
         IntentFilter filter = new IntentFilter();
@@ -22,6 +23,7 @@ public class AudioServiceReceiver extends BroadcastReceiver {
         filter.addAction(REWIND_AUDIO_FULL);
         filter.addAction(REWIND_AUDIO_15_SEC);
         filter.addAction(REQUEST_STATUS);
+        filter.addAction(DISMISS_NOTIFICATION);
         return filter;
     }
 
@@ -34,7 +36,8 @@ public class AudioServiceReceiver extends BroadcastReceiver {
         PAUSE(PAUSE_AUDIO),
         REWIND_FULL(REWIND_AUDIO_FULL),
         REWIND_15_SEC(REWIND_AUDIO_15_SEC),
-        REQ_STATUS(REQUEST_STATUS);
+        REQ_STATUS(REQUEST_STATUS),
+        DISMISS(DISMISS_NOTIFICATION);
 
         private final String mActionName;
 
@@ -74,6 +77,10 @@ public class AudioServiceReceiver extends BroadcastReceiver {
 
             case REQUEST_STATUS:
                 mAudioController.requestStatus();
+                break;
+
+            case DISMISS_NOTIFICATION:
+                // Nothing to do for now...
                 break;
 
             default:

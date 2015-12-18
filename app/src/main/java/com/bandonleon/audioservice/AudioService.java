@@ -1,9 +1,11 @@
 package com.bandonleon.audioservice;
 
 import android.app.Service;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.ServiceConnection;
 import android.content.res.AssetFileDescriptor;
 import android.media.MediaPlayer;
 import android.os.Binder;
@@ -13,6 +15,8 @@ import android.support.v4.content.LocalBroadcastManager;
 import android.text.TextUtils;
 
 import java.io.IOException;
+import java.util.HashSet;
+import java.util.Set;
 
 public class AudioService extends Service implements MediaPlayer.OnPreparedListener,
         MediaPlayer.OnCompletionListener, MediaPlayer.OnErrorListener, AudioLocalController {
@@ -24,23 +28,27 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
 
     private static final long UPDATE_INTERVAL_MSEC = 1000 / 40; // Try updating at 40 Hz
 
-    // Binder given to clients
-    private final IBinder mBinder = new LocalBinder();
+    private enum ServiceState {
+        FOREGROUND_WITH_NOTIFICATION,   // Foreground services requires notification (just being explicit here)
+        BACKGROUND_WITH_NOTIFICATION,
+        BACKGROUND
+    }
 
+    // Binder given to clients
+    private final LocalBinder mBinder = new LocalBinder();
+
+    private ServiceState mState;
+    private boolean mIsLoaded;
     private int mLastPositionMsec;
 
     private Handler mMainHandler;
-    private Runnable mPositionUpdater;
 
     private LocalBroadcastManager mBroadcastManager;
-    private MediaPlayer mAudioPlayer;
-
-    private boolean mIsLoaded;
-
-    private AudioNotificationManager mNotificationManager;
-    private boolean mSendNotification;
-
     private AudioServiceReceiver mServiceReceiver;
+
+    private MediaPlayer mAudioPlayer;
+    private Runnable mPositionUpdater;
+    private AudioNotificationManager mNotificationManager;
 
     public static Intent getPlayAudioIntent(Context context, int audioResId) {
         Intent intent = new Intent(context, AudioService.class);
@@ -55,50 +63,143 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         return intent;
     }
 
+    public static Intent getStopIntent(Context context) {
+        return new Intent(context, AudioService.class);
+    }
+
+    private interface UnbindListener {
+        void onUnbind(LocalBinder binder);
+    }
+
     /**
      * Class used for the client Binder.  Because we know this service always
      * runs in the same process as its clients, we don't need to deal with IPC.
      */
     public class LocalBinder extends Binder {
-        AudioLocalController getLocalController() {
+        private Set<UnbindListener> listeners = new HashSet<>();
+
+        public AudioLocalController getLocalController() {
             // Return this instance of AudioService so clients can call public methods
             return (AudioLocalController) AudioService.this;
         }
+
+        public void addUnbindListener(UnbindListener listener) {
+            listeners.add(listener);
+        }
+
+        public boolean removeUnbindListener(UnbindListener listener) {
+            return listeners.remove(listener);
+        }
+
+        public void notifyUnbind() {
+            for (UnbindListener listener : listeners) {
+                listener.onUnbind(this);
+            }
+            listeners.clear();
+        }
+    }
+
+    public interface ServiceListener {
+        void audioServiceBound(AudioLocalController controller);
+        void audioServiceUnbound();
+    }
+
+    public static class AudioServiceConnection implements ServiceConnection, UnbindListener {
+        private ServiceListener mListener;
+
+        public AudioServiceConnection(ServiceListener listener) {
+            mListener = listener;
+        }
+
+        @Override
+        public void onServiceConnected(ComponentName className, IBinder service) {
+            // This is called when the connection with the service has been
+            // established, giving us the service object we can use to
+            // interact with the service.  Because we have bound to a explicit
+            // service that we know is running in our own process, we can
+            // cast its IBinder to a concrete class and directly access it.
+            LocalBinder localBinder = (LocalBinder)service;
+            localBinder.addUnbindListener(this);
+            mListener.audioServiceBound(localBinder.getLocalController());
+            // mAudioController.stopForegroundService(true);
+            // mAudioController.requestStatus();
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName className) {
+            // This is called when the connection with the service has been
+            // unexpectedly disconnected -- that is, its process crashed.
+            // Because it is running in our same process, we should never
+            // see this happen.
+            mListener.audioServiceUnbound();
+        }
+
+        @Override
+        public void onUnbind(AudioService.LocalBinder binder) {
+            mListener.audioServiceUnbound();
+        }
+    };
+
+    private boolean isForeground() {
+        return mState == ServiceState.FOREGROUND_WITH_NOTIFICATION;
+    }
+
+    private boolean hasNotification() {
+        return mState == ServiceState.BACKGROUND_WITH_NOTIFICATION ||
+                mState == ServiceState.FOREGROUND_WITH_NOTIFICATION;
     }
 
     @Override
     public void onCreate() {
         super.onCreate();
 
+        mState = ServiceState.BACKGROUND;
         mIsLoaded = false;
         mLastPositionMsec = 0;
 
         mMainHandler = new Handler();
         mBroadcastManager = LocalBroadcastManager.getInstance(this);
+        mServiceReceiver = new AudioServiceReceiver(this);
+        IntentFilter filter = AudioServiceReceiver.getAudioReceiverFilter();
+        // RemoteViews in notification uses a PendingIntent so we cannot use
+        // LocalBroadcastManager to register our receiver.
+        registerReceiver(mServiceReceiver, filter);
 
         mAudioPlayer = new MediaPlayer();
         mAudioPlayer.setOnPreparedListener(this);
         mAudioPlayer.setOnCompletionListener(this);
         mAudioPlayer.setOnErrorListener(this);
 
-        mNotificationManager = new AudioNotificationManager(this);
-        mSendNotification = false;
+        mPositionUpdater = new Runnable() {
+            @Override
+            public void run() {
 
-        mServiceReceiver = new AudioServiceReceiver(this);
-        IntentFilter filter = AudioServiceReceiver.getAudioReceiverFilter();
-        // RemoteViews in notification uses a PendingIntent so we cannot use
-        // LocalBroadcastManager to register our receiver.
-        registerReceiver(mServiceReceiver, filter);
+                int currPosMsec = mAudioPlayer != null ? mAudioPlayer.getCurrentPosition() : 0;
+                if (currPosMsec != mLastPositionMsec) {
+                    mBroadcastManager.sendBroadcast(AudioClientReceiver.getPositionUpdateIntent(currPosMsec));
+                    mLastPositionMsec = currPosMsec;
+                }
+
+                if (hasNotification()) {
+                    mNotificationManager.updateProgress(mAudioPlayer.getDuration(), currPosMsec);
+                    mNotificationManager.sendNotification();
+                }
+
+                mMainHandler.postDelayed(this, UPDATE_INTERVAL_MSEC);
+            }
+        };
+
+        mNotificationManager = new AudioNotificationManager(this);
     }
 
     @Override
     public void onDestroy() {
-        unregisterReceiver(mServiceReceiver);
-
         if (mAudioPlayer != null) {
             mAudioPlayer.release();
             mAudioPlayer = null;
         }
+
+        unregisterReceiver(mServiceReceiver);
 
         super.onDestroy();
     }
@@ -131,14 +232,21 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         return START_NOT_STICKY;
     }
 
+    @Override
+    public IBinder onBind(Intent intent) {
+        return mBinder;
+    }
+
+    @Override
+    public boolean onUnbind(Intent intent) {
+        mBinder.notifyUnbind();
+        return false;
+    }
+
     private void doPause() {
         if (mAudioPlayer.isPlaying()) {
             mAudioPlayer.pause();
             stopProgressUpdates();
-        }
-        if (mSendNotification) {
-            mNotificationManager.updatePlayState(false);
-            mNotificationManager.sendNotification();
         }
     }
 
@@ -147,42 +255,19 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
             mAudioPlayer.start();
             startProgressUpdates();
         }
-        if (mSendNotification) {
-            mNotificationManager.updatePlayState(true);
-            mNotificationManager.sendNotification();
-        }
+    }
+
+    private void doStop() {
+        mAudioPlayer.stop();
+        stopProgressUpdates();
     }
 
     private void startProgressUpdates() {
-        mPositionUpdater = new Runnable() {
-            @Override
-            public void run() {
-
-                int currPosMsec = mAudioPlayer != null ? mAudioPlayer.getCurrentPosition() : 0;
-                if (currPosMsec != mLastPositionMsec) {
-                    mBroadcastManager.sendBroadcast(AudioClientReceiver.getPositionUpdateIntent(currPosMsec));
-                    mLastPositionMsec = currPosMsec;
-                }
-
-                if (mSendNotification) {
-                    mNotificationManager.updateProgress(mAudioPlayer.getDuration(), currPosMsec);
-                    mNotificationManager.sendNotification();
-                }
-
-                mMainHandler.postDelayed(this, UPDATE_INTERVAL_MSEC);
-            }
-        };
-
         mMainHandler.post(mPositionUpdater);
     }
 
     private void stopProgressUpdates() {
         mMainHandler.removeCallbacks(mPositionUpdater);
-    }
-
-    @Override
-    public IBinder onBind(Intent intent) {
-        return mBinder;
     }
 
     @Override
@@ -208,7 +293,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
 
         mBroadcastManager.sendBroadcast(AudioClientReceiver.getActionIntent(AudioClientReceiver.Action.COMPLETED));
 
-        if (mSendNotification) {
+        if (hasNotification()) {
             mNotificationManager.updatePlayState(false);
             mNotificationManager.updateProgress(1, 0);
             mNotificationManager.sendNotification();
@@ -243,18 +328,36 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         doResume();
         int positionMsec = mAudioPlayer.getCurrentPosition();
         mBroadcastManager.sendBroadcast(AudioClientReceiver.getAudioResumeIntent(positionMsec));
+
+        if (hasNotification()) {
+            startForegroundService(null);
+            mNotificationManager.updatePlayState(true);
+            mNotificationManager.sendNotification();
+        }
     }
 
     @Override
     public void pauseAudio() {
         doPause();
         mBroadcastManager.sendBroadcast(AudioClientReceiver.getActionIntent(AudioClientReceiver.Action.PAUSED));
+
+        if (hasNotification()) {
+            stopForegroundService(false);
+            mNotificationManager.updatePlayState(false);
+            mNotificationManager.sendNotification();
+        }
     }
 
     @Override
     public void rewindAudioFull() {
         doPause();
         mAudioPlayer.seekTo(0);
+
+        if (hasNotification()) {
+            stopForegroundService(false);
+            mNotificationManager.updatePlayState(false);
+            mNotificationManager.sendNotification();
+        }
     }
 
     @Override
@@ -289,17 +392,21 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
 
     @Override
     public void startForegroundService(String notificationContent) {
-        mSendNotification = true;
-        mNotificationManager.updateContent(notificationContent);
+        if (notificationContent != null) {
+            mNotificationManager.updateContent(notificationContent);
+        }
         mNotificationManager.updatePlayState(mAudioPlayer.isPlaying());
-        startForeground(mNotificationManager.getNotificationId(), mNotificationManager.getAudioNotification());
+        if (!isForeground()) {
+            mState = ServiceState.FOREGROUND_WITH_NOTIFICATION;
+            startForeground(mNotificationManager.getNotificationId(), mNotificationManager.getAudioNotification());
+        }
     }
 
     @Override
-    public void stopForegroundService() {
-        if (mSendNotification) {
-            stopForeground(true);
-            mSendNotification = false;
+    public void stopForegroundService(boolean dismissNotification) {
+        if (isForeground()) {
+            stopForeground(dismissNotification);
         }
+        mState = dismissNotification ? ServiceState.BACKGROUND : ServiceState.BACKGROUND_WITH_NOTIFICATION;
     }
 }

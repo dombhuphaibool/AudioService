@@ -6,5 +6,5 @@ package com.bandonleon.audioservice;
 public interface AudioLocalController extends AudioController {
     boolean isAudioPlaying();
     void startForegroundService(String notificationContent);
-    void stopForegroundService();
+    void stopForegroundService(boolean dismissNotification);
 }

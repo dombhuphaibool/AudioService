@@ -29,14 +29,15 @@ public class AudioNotificationManager {
         mNotificationView.setOnClickPendingIntent(R.id.play_btn, resumeIntent);
         PendingIntent pauseIntent = PendingIntent.getBroadcast(context, 0, AudioServiceReceiver.getActionIntent(Action.PAUSE), 0);
         mNotificationView.setOnClickPendingIntent(R.id.pause_btn, pauseIntent);
+        PendingIntent dismissIntent = PendingIntent.getBroadcast(context, 0, AudioServiceReceiver.getActionIntent(Action.DISMISS), 0);
 
         Intent notificationIntent = new Intent(context, MainActivity.class);
         PendingIntent pendingIntent = PendingIntent.getActivity(context, 0, notificationIntent, 0);
         mNotificationBuilder = new Notification.Builder(context)
                 .setContent(mNotificationView)
                 .setSmallIcon(R.drawable.ic_notification)
-                .setContentIntent(pendingIntent);
-        // .setDeleteIntent()
+                .setContentIntent(pendingIntent)
+                .setDeleteIntent(dismissIntent);
     }
 
     private void updateNotificationView(boolean isPlaying) {

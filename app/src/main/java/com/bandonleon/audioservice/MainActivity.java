@@ -1,11 +1,9 @@
 package com.bandonleon.audioservice;
 
-import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
-import android.os.IBinder;
 import android.support.v4.content.LocalBroadcastManager;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
@@ -13,7 +11,9 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.ProgressBar;
 
-public class MainActivity extends AppCompatActivity implements AudioClientReceiver.AudioListener {
+public class MainActivity extends AppCompatActivity implements AudioClientReceiver.AudioListener,
+        AudioService.ServiceListener {
+
     private static int AUDIO_TRACK_RESOURCE_ID = R.raw.nocturne_op9_no1;
     private static String AUDIO_TRACK_TITLE = "Chopin Op.9 no.1";
 
@@ -21,6 +21,8 @@ public class MainActivity extends AppCompatActivity implements AudioClientReceiv
     private boolean mIsPlaying = false;
 
     private AudioClientReceiver mAudioReceiver;
+    private AudioLocalController mAudioController;
+    private ServiceConnection mConnection;
 
     private Button mActionBtn;
     private ProgressBar mProgressBar;
@@ -32,6 +34,9 @@ public class MainActivity extends AppCompatActivity implements AudioClientReceiv
 
         mAudioReceiver = new AudioClientReceiver();
         mAudioReceiver.addAudioListener(this);
+
+        mAudioController = null;
+        mConnection = new AudioService.AudioServiceConnection(this);
 
         // Initialize states, but these will be updated in onResume()
         mIsLoaded = false;
@@ -102,11 +107,6 @@ public class MainActivity extends AppCompatActivity implements AudioClientReceiv
         super.onResume();
         IntentFilter filter = AudioClientReceiver.getAudioReceiverFilter();
         LocalBroadcastManager.getInstance(this).registerReceiver(mAudioReceiver, filter);
-        if (mAudioController != null) {
-            mAudioController.stopForegroundService();
-            mAudioController.requestStatus();
-        }
-        // startService(AudioService.getActionIntent(this, Action.GET_STATUS));
     }
 
     @Override
@@ -115,6 +115,10 @@ public class MainActivity extends AppCompatActivity implements AudioClientReceiv
         if (mAudioController != null && mAudioController.isAudioPlaying()) {
             startService(AudioService.getStartIdleIntent(this));
             mAudioController.startForegroundService(AUDIO_TRACK_TITLE);
+        } else {
+            // No need to stop the service here, ideally we would stop it when it logically makes
+            // sense. Perhaps when the app exits.
+            // stopService(AudioService.getStopIntent(this));
         }
         super.onPause();
     }
@@ -168,25 +172,17 @@ public class MainActivity extends AppCompatActivity implements AudioClientReceiv
         updateUI();
     }
 
-    private AudioLocalController mAudioController;
-    private ServiceConnection mConnection = new ServiceConnection() {
-        public void onServiceConnected(ComponentName className, IBinder service) {
-            // This is called when the connection with the service has been
-            // established, giving us the service object we can use to
-            // interact with the service.  Because we have bound to a explicit
-            // service that we know is running in our own process, we can
-            // cast its IBinder to a concrete class and directly access it.
-            mAudioController = ((AudioService.LocalBinder)service).getLocalController();
-            mAudioController.stopForegroundService();
+    @Override
+    public void audioServiceBound(AudioLocalController controller) {
+        mAudioController = controller;
+        if (mAudioController != null) {
+            mAudioController.stopForegroundService(true);
             mAudioController.requestStatus();
         }
+    }
 
-        public void onServiceDisconnected(ComponentName className) {
-            // This is called when the connection with the service has been
-            // unexpectedly disconnected -- that is, its process crashed.
-            // Because it is running in our same process, we should never
-            // see this happen.
-            mAudioController = null;
-        }
-    };
+    @Override
+    public void audioServiceUnbound() {
+        mAudioController = null;
+    }
 }
