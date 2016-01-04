@@ -134,6 +134,14 @@ public class MainActivity extends AppCompatActivity implements AudioClientReceiv
      *                              AudioClientReceiver.AudioListener
      ***************************************************************************************/
     @Override
+    public void onAudioLoaded(int durationMsec) {
+        mIsLoaded = true;
+        mIsPlaying = false;
+        mProgressBar.setMax(durationMsec);
+        updateUI();
+    }
+
+    @Override
     public void onAudioStarted(int durationMsec) {
         mIsLoaded = true;
         mIsPlaying = true;
@@ -174,6 +182,9 @@ public class MainActivity extends AppCompatActivity implements AudioClientReceiv
         updateUI();
     }
 
+    /***************************************************************************************
+     *                              AudioService.ServiceListener
+     ***************************************************************************************/
     @Override
     public void audioServiceBound(AudioLocalController controller) {
         mAudioController = controller;

@@ -10,6 +10,7 @@ import java.util.Set;
 
 public class AudioClientReceiver extends BroadcastReceiver {
 
+    private static final String AUDIO_LOADED = "com.bandonleon.clientreceiver.action.AUDIO_LOADED";
     private static final String AUDIO_STARTED = "com.bandonleon.clientreceiver.action.AUDIO_STARTED";
     private static final String AUDIO_COMPLETED = "com.bandonleon.clientreceiver.action.AUDIO_COMPLETED";
     private static final String AUDIO_PAUSED = "com.bandonleon.clientreceiver.action.AUDIO_PAUSED";
@@ -24,6 +25,7 @@ public class AudioClientReceiver extends BroadcastReceiver {
 
     public static IntentFilter getAudioReceiverFilter() {
         IntentFilter filter = new IntentFilter();
+        filter.addAction(AUDIO_LOADED);
         filter.addAction(AUDIO_STARTED);
         filter.addAction(AUDIO_COMPLETED);
         filter.addAction(AUDIO_PAUSED);
@@ -36,6 +38,12 @@ public class AudioClientReceiver extends BroadcastReceiver {
     public static Intent getPositionUpdateIntent(int positionMsec) {
         Intent intent = new Intent(AUDIO_POSITION_UPDATE);
         intent.putExtra(EXTRA_POSITION, positionMsec);
+        return intent;
+    }
+
+    public static Intent getAudioLoadedIntent(int durationMsec) {
+        Intent intent = new Intent(AUDIO_LOADED);
+        intent.putExtra(EXTRA_DURATION, durationMsec);
         return intent;
     }
 
@@ -80,6 +88,7 @@ public class AudioClientReceiver extends BroadcastReceiver {
     }
 
     public interface AudioListener {
+        void onAudioLoaded(int durationMsec);
         void onAudioStarted(int durationMsec);
         void onAudioCompleted();
         void onAudioPaused();
@@ -95,6 +104,13 @@ public class AudioClientReceiver extends BroadcastReceiver {
         int durationMsec = 0;
         int positionMsec = 0;
         switch (intent.getAction()) {
+            case AUDIO_LOADED:
+                durationMsec = intent.getIntExtra(EXTRA_DURATION, 0);
+                for (AudioListener listener : mListeners) {
+                    listener.onAudioLoaded(durationMsec);
+                }
+                break;
+
             case AUDIO_STARTED:
                 durationMsec = intent.getIntExtra(EXTRA_DURATION, 0);
                 for (AudioListener listener : mListeners) {

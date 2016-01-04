@@ -39,6 +39,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
 
     private ServiceState mState;
     private boolean mIsLoaded;
+    private boolean mPlayOnLoad;
     private int mLastPositionMsec;
 
     private Handler mMainHandler;
@@ -155,6 +156,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
 
         mState = ServiceState.BACKGROUND;
         mIsLoaded = false;
+        mPlayOnLoad = false;
         mLastPositionMsec = 0;
 
         mMainHandler = new Handler();
@@ -279,9 +281,12 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
 
         mIsLoaded = true;
         int durationMsec = mAudioPlayer.getDuration();
-        mBroadcastManager.sendBroadcast(AudioClientReceiver.getAudioStartedIntent(durationMsec));
+        mBroadcastManager.sendBroadcast(AudioClientReceiver.getAudioLoadedIntent(durationMsec));
 
-        doResume();
+        if (mPlayOnLoad) {
+            mBroadcastManager.sendBroadcast(AudioClientReceiver.getAudioStartedIntent(durationMsec));
+            doResume();
+        }
     }
 
     @Override
@@ -309,18 +314,28 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
     /***************************************************************************************
      *                               LocalAudioController
      ***************************************************************************************/
-    @Override
-    public void playAudio(int audioResId) {
+    private void loadAudio(int audioResId, boolean playOnLoad) {
         if (audioResId != 0) {
             AssetFileDescriptor assetFD = getResources().openRawResourceFd(audioResId);
             try {
                 mAudioPlayer.setDataSource(assetFD.getFileDescriptor(),
                         assetFD.getStartOffset(), assetFD.getLength());
+                mPlayOnLoad = playOnLoad;
                 mAudioPlayer.prepareAsync();
             } catch (IOException ex) {
                 // @TODO: Log exception here...
             }
         }
+    }
+
+    @Override
+    public void loadAudio(int audioResId) {
+        loadAudio(audioResId, false);
+    }
+
+    @Override
+    public void playAudio(int audioResId) {
+        loadAudio(audioResId, true);
     }
 
     @Override
@@ -346,6 +361,13 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
             mNotificationManager.updatePlayState(false);
             mNotificationManager.sendNotification();
         }
+    }
+
+    @Override
+    public void seekAudio(int msec) {
+        mAudioPlayer.seekTo(msec);
+        int positionMsec = mAudioPlayer.getCurrentPosition();
+        mBroadcastManager.sendBroadcast(AudioClientReceiver.getPositionUpdateIntent(positionMsec));
     }
 
     @Override
